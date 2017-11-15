@@ -1,0 +1,166 @@
+<?php
+class ApiController extends Admin_Library_Controller_Action_Abstract {
+public $Account;
+public function init()
+{
+Zend_Layout::getMvcInstance()->setLayout('layout2');
+$this->queue = new Admin_Model_Outgoingsms;
+$this->contacts = new Admin_Model_Emailsdb;
+$this->vcards = new Admin_Model_Vcards;
+
+}
+
+public function indexAction()
+{
+$this->_helper->viewRenderer->setNoRender();
+$this->_helper->layout->disableLayout();
+$client_id = $this->_getParam('client');
+$client = true;
+$campaign = false;
+$agant = false;
+
+$limit = $this->_getParam('limit');
+if($limit == 0) {
+	$limit = 100;
+}
+
+if(strpos($client_id,'c-')!==false) {
+$input = explode("-",$client_id);	
+$campaign_id = $input[1];	
+$client = false;
+$campaign = true;	
+}
+
+if(strpos($client_id,'ag-')!==false) {
+$input = explode("-",$client_id);	
+$client_id = $input[1];	
+$client = false;
+$campaign = false;	
+$agent = true;
+}
+
+/*
+if(strpos($client_id,',')!==false) {
+$d = explode(',',$client_id);
+if(count($d)==2) {
+	$from = $d[1];
+} 	
+
+if(count($d)==3) {
+	$to = $d[1];
+}
+
+}
+*/
+
+
+if($client_id!='' && $client == true) {
+	$data = $this->queue->getApiQueueClient($client_id,$limit);
+} elseif($client_id !='' && $campaign == true) {
+	$data = $this->queue->getApiQueueCampaign($campaign_id,$limit);
+} elseif($client_id !='' && $agent == true) {
+	$data = $this->queue->getApiQueueAgent($client_id,$limit);
+} else {
+	$data = $this->queue->getApiQueueClient('all',$limit);
+}
+
+if(!empty($data)) {
+	
+	$temp = [];
+	
+		foreach($data as $da) {
+			$temp[] = $da['id'];
+			
+		}
+		
+		$this->queue->setApiQueueClientTempStatus(implode(',',$temp));
+	
+	
+echo json_encode($data);	
+} else {
+	
+	echo json_encode(array('error'=>'no message'));
+}
+
+}
+
+
+public function setstatusAction(){
+$this->_helper->viewRenderer->setNoRender();
+$this->_helper->layout->disableLayout();
+$msg_id=$this->_getParam('id');	
+$status=$this->_getParam('status');	
+$time = date('Y-m-d H:i:s');
+$this->queue->query("update outgoing_sms set result=$status,sent_time='".$time."' where id=$msg_id");
+}
+
+
+
+public function getcontactsAction(){
+	$this->_helper->viewRenderer->setNoRender();
+    $this->_helper->layout->disableLayout();
+	$listid=$this->_getParam('id');	
+	$contacts = $this->contacts->getMobileNosAPI($listid);
+	$temp = [];
+	if(!empty($contacts)) {
+		foreach($contacts as $contact) {
+			$temp[] = $contact['mobileno'];
+			
+		}
+		
+		//$this->contacts->setMobileNosAPITemp(implode(',',$temp));
+		echo '"'.implode(',',$temp).'"';
+		
+	} else {
+		echo json_encode(array('error'=>'no message'));
+	}
+}
+
+
+public function contactsstatusAction(){
+	$this->_helper->viewRenderer->setNoRender();
+    $this->_helper->layout->disableLayout();
+	$contacts = file_get_contents('php://input');
+	$time = date('Y-m-d H:i:s');
+	error_log($time.":valid".$contacts."\r\n",3,"$logfile");
+	if($contacts!='') {
+	$this->contacts->setMobileNosAPI(json_decode($contacts));
+	}
+}
+
+public function contactsstatusinvalidAction(){
+	$this->_helper->viewRenderer->setNoRender();
+    $this->_helper->layout->disableLayout();
+	$contacts = file_get_contents('php://input');
+	$time = date('Y-m-d H:i:s');
+	error_log($time.":invalid-".$contacts."\r\n",3,"$logfile");
+	if($contacts!='') {
+	$this->contacts->setMobileNosAPIInvalid(json_decode($contacts));
+	}
+}
+
+
+
+
+public function getvcardAction() {
+	$this->_helper->viewRenderer->setNoRender();
+    $this->_helper->layout->disableLayout();
+	$id=$this->_getParam('id');	
+    $details = $this->vcards->vcarddetails($id);
+	
+	echo json_encode($details);
+	}
+	
+	public function agentAction() {
+		 $client_id = $this->_getParam('agent');
+		 $data = $this->queue->getApiQueueAgent($client_id,10);
+		 print_r($data);
+		 die;
+		
+	}
+
+
+
+
+}
+?>
